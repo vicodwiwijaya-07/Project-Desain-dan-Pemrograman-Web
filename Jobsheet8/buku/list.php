@@ -4,7 +4,19 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/../includes/koneksi.php';
 
-$daftarBuku = $pdo->query("SELECT * FROM buku ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+// 1. Ambil keyword dari URL (jika ada form pencarian yang disubmit)
+$keyword = trim($_GET['q'] ?? '');
+
+// 2. Modifikasi Query
+if ($keyword !== '') {
+     $stmt = $pdo->prepare("SELECT * FROM buku WHERE judul ILIKE :keyword ORDER BY id DESC");
+    // Tambahkan wildcard '%' di awal dan akhir keyword agar bisa mencari kata di tengah kalimat
+    $stmt->execute(['keyword' => '%' . $keyword . '%']);
+    $daftarBuku = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    // Jika tidak ada pencarian, tampilkan semua buku seperti biasa
+    $daftarBuku = $pdo->query("SELECT * FROM buku ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+}
 
 include __DIR__ . '/../includes/header.php';
 ?>
@@ -17,10 +29,18 @@ include __DIR__ . '/../includes/header.php';
         <?php unset($_SESSION['flash']); ?>
     <?php endif; ?>
 
-    <div class="search-box">
+    <!-- 3. Ubah div menjadi form method GET -->
+    <form method="GET" action="" class="search-box">
         <label for="search-input">Cari Judul Buku</label>
-        <input type="text" id="search-input" placeholder="Ketik judul buku...">
-    </div>
+        <!-- Tambahkan name="q" dan value agar keyword tidak hilang setelah disubmit -->
+        <input type="text" id="search-input" name="q" placeholder="Ketik judul buku..." value="<?php echo htmlspecialchars($keyword); ?>">
+        <button type="submit">Cari</button>
+        
+        <?php if ($keyword !== ''): ?>
+            <!-- Tombol reset untuk kembali melihat semua buku -->
+            <a href="list.php"><button type="button">Reset</button></a>
+        <?php endif; ?>
+    </form>
 
     <div class="table-responsive">
         <table>
@@ -30,15 +50,16 @@ include __DIR__ . '/../includes/header.php';
                     <th>Pengarang</th>
                     <th>Tahun</th>
                     <th>Stok</th>
-                    <th>Tanggal Ditambahkan</th> <!-- Kolom Baru -->
+                    <th>Tanggal Ditambahkan</th>
                     <th>Aksi</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (empty($daftarBuku)): ?>
                     <tr>
-                        <!-- Ubah colspan jadi 6 karena sekarang ada 6 kolom -->
-                        <td colspan="6">Belum ada data buku. Silakan tambah lewat menu "Tambah Buku".</td>
+                        <td colspan="6">
+                            <?php echo ($keyword !== '') ? 'Buku dengan judul tersebut tidak ditemukan.' : 'Belum ada data buku. Silakan tambah lewat menu "Tambah Buku".'; ?>
+                        </td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($daftarBuku as $buku): ?>
@@ -47,17 +68,13 @@ include __DIR__ . '/../includes/header.php';
                             <td><?php echo htmlspecialchars($buku['pengarang']); ?></td>
                             <td><?php echo htmlspecialchars($buku['tahun']); ?></td>
                             <td><?php echo htmlspecialchars($buku['stok']); ?></td>
-                            
-                            <!-- <Menampilkan kolom tanggal dengan format (Tanggal-Bulan-Tahun Jam:Menit)  -->
                             <td>
                                 <?php 
-                                // Jika tanggalnya kosong/null, tampilkan '-', jika ada tampilkan format tanggal
                                 echo !empty($buku['tanggal_ditambahkan']) 
                                     ? date('d-m-Y H:i', strtotime($buku['tanggal_ditambahkan'])) 
                                     : '-'; 
                                 ?>
                             </td>
-                            
                             <td>
                                 <button type="button">Edit</button>
                                 <button type="button" class="btn-hapus">Hapus</button>
